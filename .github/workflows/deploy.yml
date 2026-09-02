@@ -1,0 +1,108 @@
+name: CI/CD Pipeline - Test & Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # -------------------------------------------------------------
+  # Job 1: Test & Build Validation (CI)
+  # -------------------------------------------------------------
+  test-and-build:
+    name: Lint, Test & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: |
+            package.json
+            backend/package.json
+            frontend/package.json
+
+      - name: Install dependencies
+        run: |
+          npm --prefix backend ci || npm --prefix backend install
+          npm --prefix frontend ci || npm --prefix frontend install
+
+      - name: Run TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Build frontend for production
+        run: npm run build
+
+      - name: Run backend integration tests (optional)
+        if: env.TEST_MANAGER_EMAIL != ''
+        run: npm test
+        env:
+          TEST_MANAGER_EMAIL: ${{ secrets.TEST_MANAGER_EMAIL }}
+          TEST_MANAGER_PASSWORD: ${{ secrets.TEST_MANAGER_PASSWORD }}
+
+  # -------------------------------------------------------------
+  # Job 2: Deploy to AWS EC2 (CD)
+  # -------------------------------------------------------------
+  deploy-to-ec2:
+    name: Deploy to AWS EC2
+    needs: test-and-build
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy application via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -e
+            echo "🚀 Starting deployment on EC2..."
+
+            # 1. Ensure deployment directory exists
+            APP_DIR="${HOME}/worklog"
+            if [ ! -d "$APP_DIR" ]; then
+              echo "📂 Cloning repository for first-time setup..."
+              git clone "${{ github.server_url }}/${{ github.repository }}.git" "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+
+            # 2. Fetch and checkout latest main
+            echo "📥 Pulling latest changes from main branch..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            # 3. Inject production backend/.env if PROD_ENV secret is provided
+            if [ -n '${{ secrets.PROD_ENV }}' ]; then
+              echo "🔒 Updating backend/.env configuration..."
+              cat << 'EOF' > backend/.env
+            ${{ secrets.PROD_ENV }}
+            EOF
+            fi
+
+            # 4. Build and restart Docker containers
+            echo "🐳 Rebuilding and starting Docker containers..."
+            docker compose down --remove-orphans || true
+            docker compose build --pull
+            docker compose up -d
+
+            # 5. Run database migrations inside backend container
+            echo "🗄️ Running database migrations..."
+            docker compose exec -T backend npm run migrate
+
+            # 6. Clean up old unused Docker images
+            echo "🧹 Pruning unused Docker images..."
+            docker image prune -f
+
+            echo "✅ Deployment completed successfully!"
