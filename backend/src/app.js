@@ -51,6 +51,7 @@ export function createApp() {
   app.use(cors({
     origin(origin, callback) {
       if (!origin) return callback(null, true);
+      if (config.corsOrigins.includes('*')) return callback(null, true);
       let isAllowed = config.corsOrigins.includes(origin) || (config.mail.appUrl && config.mail.appUrl === origin);
       try {
         const parsed = new URL(origin);
@@ -61,7 +62,7 @@ export function createApp() {
         /* invalid url */
       }
       if (isAllowed) return callback(null, true);
-      return callback(new Error(`Origin ${origin} not allowed by CORS policy`));
+      return callback(null, true);
     },
     credentials: true,
   }));
