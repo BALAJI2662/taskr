@@ -9,7 +9,7 @@ import {
 import { dashboardApi, taskApi } from '../../api/endpoints';
 import { ApiError } from '../../api/client';
 import { useToast } from '../../components/Toast';
-import { Avatar, EmptyState, ErrorState, PageLoader, StatCard } from '../../components/ui';
+import { Avatar, EmptyState, ErrorState, Spinner, StatCard } from '../../components/ui';
 import { TaskBoard } from '../../components/TaskBoard';
 import { TimelineStrip } from '../../components/TimelineStrip';
 import { formatDate, formatDateShort, reportLines } from '../../lib/format';
@@ -88,8 +88,85 @@ export function ManagerDashboard() {
     }
   };
 
-  if (loading) return <PageLoader />;
-  if (error || !data) return <ErrorState message={error || 'No data available.'} onRetry={() => void load(range)} />;
+  /*
+    The title and the period control, kept out of the branches below so that they are
+    rendered by every one of them.
+
+    Changing the period used to return `<PageLoader />` for the whole screen, which
+    tore the heading and the control the user had just pressed out of the tree and
+    built them again a moment later — the page appearing to reload rather than a tab
+    being switched. Everything that is not the figures themselves stays put now, as
+    it does on Daily Reports.
+  */
+  const header = (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h1 className="display-title text-xl text-foreground sm:text-3xl lg:text-4xl">Dashboard overview</h1>
+        {/*
+          The date, and which period the figures below are counting. The cards no
+          longer say it themselves, so it is said once here — otherwise a number
+          like "Assigned 1" gives no way to tell a quiet day from a quiet year.
+        */}
+        <p className="mt-1 text-sm text-muted-foreground">
+          {formatDate(new Date().toISOString())}
+          <span aria-hidden> · </span>
+          <span className="font-medium text-foreground">
+            {RANGES.find((r) => r.key === range)?.label}
+          </span>
+        </p>
+      </div>
+
+      {/*
+        Which period the counts below are read over — the same segmented control
+        Daily Reports uses, so switching period feels the same on both screens, but
+        keeping the coral on the selected period rather than taking the neutral pill
+        the reports list uses.
+      */}
+      {/*
+        `self-start` because this row is a flex column on a phone, where the default
+        `stretch` pulled the track the full width of the screen and left it running
+        far past the last period. The control should end where its options do.
+      */}
+      <div
+        className="segmented segmented-raised shrink-0 self-start sm:self-auto"
+        role="group"
+        aria-label="Period for the headline figures"
+      >
+        {RANGES.map((r) => (
+          <button
+            key={r.key}
+            type="button"
+            onClick={() => setRange(r.key)}
+            aria-pressed={range === r.key}
+            className={`segmented-item ${range === r.key ? 'segmented-item-primary' : ''}`}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  /*
+    Nothing to show yet — the first load, or a failure. Later loads keep the previous
+    figures on screen rather than falling back here, which is what stops the layout
+    collapsing and springing back each time the period changes.
+  */
+  if (!data) {
+    return (
+      <div className="space-y-6">
+        {header}
+        {error ? (
+          <ErrorState message={error} onRetry={() => void load(range)} />
+        ) : (
+          <div className="card flex min-h-[420px] items-center justify-center" aria-busy="true" aria-live="polite">
+            <Spinner className="h-8 w-8 text-muted-foreground" />
+            <span className="sr-only">Loading the dashboard</span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const { summary, activity, recent_tasks: tasks, recent_reports: reports } = data;
 
@@ -100,50 +177,20 @@ export function ManagerDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="display-title text-2xl text-foreground sm:text-4xl">Dashboard overview</h1>
-          {/*
-            The date, and which period the figures below are counting. The cards no
-            longer say it themselves, so it is said once here — otherwise a number
-            like "Assigned 1" gives no way to tell a quiet day from a quiet year.
-          */}
-          <p className="mt-1 text-sm text-muted-foreground">
-            {formatDate(new Date().toISOString())}
-            <span aria-hidden> · </span>
-            <span className="font-medium text-foreground">
-              {RANGES.find((r) => r.key === range)?.label}
-            </span>
-          </p>
-        </div>
-        {/*
-          Which period the counts below are read over. A row of buttons rather than a
-          select: there are four, they are short, and the one in force should be
-          readable without opening anything.
-        */}
-        <div
-          className="flex items-center gap-1 rounded-xl border border-border bg-card p-1"
-          role="group"
-          aria-label="Period for the headline figures"
-        >
-          {RANGES.map((r) => (
-            <button
-              key={r.key}
-              type="button"
-              onClick={() => setRange(r.key)}
-              aria-pressed={range === r.key}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                range === r.key
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {header}
 
+      {/*
+        While the next period is loading the figures already on screen stay where
+        they are and fade back, rather than being replaced by a spinner. They are
+        dimmed and made untappable because they still describe the *previous*
+        period — visibly stale, and not something to act on until they settle.
+      */}
+      <div
+        aria-busy={loading}
+        className={`space-y-6 transition-opacity duration-200 ease-out ${
+          loading ? 'pointer-events-none opacity-40' : ''
+        }`}
+      >
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard label="Total Team Members" value={summary.total_team_members} accent="brand" icon={<Users className="h-5 w-5" />} />
         <StatCard label="Assigned" value={summary.tasks_assigned_today} accent="blush" icon={<ClipboardCheck className="h-5 w-5" />} />
@@ -228,7 +275,7 @@ export function ManagerDashboard() {
       <section className="card p-5">
         <h2 className="font-semibold text-foreground">Activity — last 14 days</h2>
         <p className="text-xs text-muted-foreground">Tasks assigned and completed, plus daily reports submitted.</p>
-        <div className="mt-4 h-64 w-full">
+        <div className="mt-4 h-52 w-full sm:h-64">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 5, right: 8, left: -18, bottom: 0 }}>
               <defs>
@@ -317,7 +364,7 @@ export function ManagerDashboard() {
           </ul>
         )}
       </section>
-
+      </div>
     </div>
   );
 }

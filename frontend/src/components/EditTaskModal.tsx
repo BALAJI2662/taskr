@@ -4,6 +4,7 @@ import { taskApi } from '../api/endpoints';
 import { ApiError } from '../api/client';
 import { useToast } from './Toast';
 import { Modal, Spinner, Select } from './ui';
+import { useLastPresent } from '../lib/presence';
 import type { Priority, Task } from '../types';
 
 const PRIORITIES: { value: Priority; label: string }[] = [
@@ -26,7 +27,7 @@ interface Props {
  * and quietly rewrite who is accountable, which is better done by closing this one and
  * assigning a new task.
  */
-export function EditTaskModal({ open, onClose, task, onSaved }: Props) {
+export function EditTaskModal({ open, onClose, task: taskProp, onSaved }: Props) {
   const toast = useToast();
 
   const [title, setTitle] = useState('');
@@ -39,16 +40,23 @@ export function EditTaskModal({ open, onClose, task, onSaved }: Props) {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!open || !task) return;
-    setTitle(task.title);
-    setDescription(task.description);
-    setNotes(task.notes ?? '');
-    setPriority(task.priority);
-    setStartDate(task.start_date ?? '');
-    setDeadline(task.deadline ?? '');
+    if (!open || !taskProp) return;
+    setTitle(taskProp.title);
+    setDescription(taskProp.description);
+    setNotes(taskProp.notes ?? '');
+    setPriority(taskProp.priority);
+    setStartDate(taskProp.start_date ?? '');
+    setDeadline(taskProp.deadline ?? '');
     setErrors({});
-  }, [open, task]);
+  }, [open, taskProp]);
 
+  /*
+    The parent closes this by clearing the task, which would tear the dialog out of
+    the tree before its exit animation could play. Holding the last one keeps the
+    panel's content on screen for the beat it takes to leave — nothing in it can be
+    edited during that beat, because `open` is already false.
+  */
+  const task = useLastPresent(taskProp);
   if (!task) return null;
 
   const submit = async (e: FormEvent) => {

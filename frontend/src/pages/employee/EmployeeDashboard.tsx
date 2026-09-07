@@ -41,7 +41,7 @@ export function EmployeeDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="display-title text-2xl text-foreground sm:text-4xl">
+        <h1 className="display-title text-xl text-foreground sm:text-3xl lg:text-4xl">
           Welcome, {user?.name.split(' ')[0]}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">

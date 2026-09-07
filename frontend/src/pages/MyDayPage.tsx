@@ -174,7 +174,7 @@ export function MyDayPage() {
       />
 
       <div className="card">
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-4 sm:px-5">
           <h2 className="flex items-center gap-2 font-semibold text-foreground">
             <NotebookPen className="h-4 w-4 text-primary-strong" aria-hidden />
             {formatDate(day)}
@@ -241,8 +241,8 @@ export function MyDayPage() {
             </div>
           </div>
 
-          <div className="flex justify-end">
-            <button type="submit" disabled={saving || !title.trim()} className="btn-primary">
+          <div className="flex justify-stretch sm:justify-end">
+            <button type="submit" disabled={saving || !title.trim()} className="btn-primary w-full sm:w-auto">
               {saving
                 ? <><Spinner className="h-4 w-4" /> Adding…</>
                 : <><Plus className="h-4 w-4" /> Add to my day</>}
@@ -262,16 +262,16 @@ export function MyDayPage() {
             description="Write what you want to get done, and tie it to a project or task if it helps."
           />
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="stagger divide-y divide-border">
             {todos.map((todo) => (
-              <li key={todo.id} className="group flex items-start gap-3 px-5 py-3.5">
+              <li key={todo.id} className="group flex items-start gap-3 px-4 py-3.5 sm:px-5">
                 <input
                   type="checkbox"
                   checked={todo.is_done}
                   disabled={busyId === todo.id}
                   onChange={() => void toggle(todo)}
                   aria-label={todo.is_done ? `Mark "${todo.title}" as not done` : `Mark "${todo.title}" as done`}
-                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-primary"
+                  className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-primary sm:h-4 sm:w-4"
                 />
 
                 <div className="min-w-0 flex-1">
@@ -308,7 +308,13 @@ export function MyDayPage() {
                     type="button"
                     onClick={() => void remove(todo)}
                     aria-label={`Remove "${todo.title}"`}
-                    className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                    /*
+                      Always visible on a phone. Revealing it on hover is a fine way
+                      to keep a list quiet with a mouse, but a touch screen has no
+                      hover state — there the button was simply never reachable, and
+                      an item could not be removed at all.
+                    */
+                    className="tap shrink-0 rounded p-1.5 text-muted-foreground transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 sm:p-1 sm:opacity-0 sm:group-hover:opacity-100"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -318,7 +324,7 @@ export function MyDayPage() {
           </ul>
         )}
 
-        <p className="flex items-start gap-2 border-t border-border px-5 py-3 text-xs text-muted-foreground">
+        <p className="flex items-start gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground sm:px-5">
           <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
           Private to you. Nothing on this page is visible to your manager, and none of it
           counts towards your task list, daily reports or analytics.

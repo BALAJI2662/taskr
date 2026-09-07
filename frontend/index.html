@@ -2,7 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      `viewport-fit=cover` lets the app paint into the notch and home-indicator areas;
+      the safe-area insets in index.css then keep content out of them. Zoom is left
+      alone deliberately — pinching to read is nobody's business but the reader's.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!--
+      Installed to a phone's home screen, the app gets its own window rather than
+      Safari's chrome, and the status bar is drawn over the page so the header's own
+      background continues to the top edge. `theme-color` is what tints the browser's
+      surrounding chrome; it is kept in step with the theme from `src/lib/theme.ts`.
+    -->
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Taskr" />
+    <!-- Stops iOS turning bare numbers into "call this" links inside task text. -->
+    <meta name="format-detection" content="telephone=no" />
     <meta name="description" content="Internal employee task management and daily work reporting portal." />
     <title>Taskr</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -29,6 +48,8 @@
             : window.matchMedia('(prefers-color-scheme: dark)').matches;
           if (dark) document.documentElement.classList.add('dark');
           document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', dark ? '#09090b' : '#ffffff');
         } catch (e) { /* storage unavailable; the app applies it on mount */ }
       })();
     </script>

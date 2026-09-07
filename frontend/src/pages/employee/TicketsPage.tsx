@@ -27,6 +27,21 @@ const EMPLOYEE_STATUSES: TicketStatus[] = ['open', 'closed'];
 
 type View = 'board' | 'list';
 
+/**
+ * Which view a phone opens on.
+ *
+ * The board is the better default with a mouse, and unusable without one: a card is
+ * moved between columns by dragging it or by Ctrl-arrowing it, and a touch screen
+ * offers neither. The card carries no status control of its own, so on a phone the
+ * board can be read but not worked — the list, where every ticket has a status
+ * select, is the one that can.
+ *
+ * Read once, at mount. Rotating a phone to landscape should not throw away the view
+ * the user has since chosen.
+ */
+const initialView = (): View =>
+  (typeof window !== 'undefined' && window.innerWidth < 640 ? 'list' : 'board');
+
 export function TicketsPage() {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -34,7 +49,7 @@ export function TicketsPage() {
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [counts, setCounts] = useState<TicketCounts | null>(null);
-  const [view, setView] = useState<View>('board');
+  const [view, setView] = useState<View>(initialView);
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -129,8 +144,8 @@ export function TicketsPage() {
 
       <div className="card">
         <div className="flex flex-col gap-3 border-b border-border p-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="segmented" role="tablist" aria-label="How to show tickets">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="segmented shrink-0" role="tablist" aria-label="How to show tickets">
               <button
                 type="button"
                 role="tab"
@@ -153,8 +168,8 @@ export function TicketsPage() {
 
             {/* Only the list needs a status filter; the board's columns are one. */}
             {view === 'list' && (
-              <div className="overflow-x-auto">
-                <div className="segmented min-w-max" role="tablist" aria-label="Filter tickets by status">
+              <div className="min-w-0">
+                <div className="segmented" role="tablist" aria-label="Filter tickets by status">
                   {STATUS_TABS.map((tab) => (
                     <button
                       key={tab.value || 'all'}

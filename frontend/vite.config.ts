@@ -12,8 +12,20 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    /*
+      Bind to every interface, not just loopback, so the dev server can be opened
+      from a phone on the same Wi-Fi — which is the only way to test the mobile
+      layout on a real device, with a real touch screen and a real notch.
+
+      This does expose the dev server, and the API behind its proxy, to anything
+      else on the network. That is fine on a home or office LAN and is not fine on
+      a public one; there is no authentication in front of the Vite server itself.
+    */
+    host: true,
     // The API is called through /api on the same origin in development, so the
-    // browser never deals with cross-origin cookies.
+    // browser never deals with cross-origin cookies. This is also what makes the
+    // phone work without touching CORS: to the device it is all one origin, and
+    // the login cookie is same-site by construction.
     proxy: {
       '/api': {
         target: process.env.VITE_API_TARGET || 'http://localhost:4000',

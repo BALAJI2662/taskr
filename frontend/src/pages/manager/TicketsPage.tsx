@@ -8,7 +8,7 @@ import { TicketList } from '../../components/TicketList';
 import { TicketBoard } from '../../components/TicketBoard';
 import { TICKET_STATUS_LABEL } from '../../components/Badges';
 import {
-  EmptyState, ErrorState, LoadingBlock, Modal, PageHeader, SearchInput, StatCard, Select,
+  EmptyState, ErrorState, FilterPanel, LoadingBlock, Modal, PageHeader, SearchInput, StatCard, Select,
 } from '../../components/ui';
 import type { Project, TeamMember, Ticket, TicketCounts, TicketStatus } from '../../types';
 
@@ -25,6 +25,21 @@ const MANAGER_STATUSES: TicketStatus[] = ['open', 'in_progress', 'resolved', 'cl
 
 type View = 'board' | 'list';
 
+/**
+ * Which view a phone opens on.
+ *
+ * The board is the better default with a mouse, and unusable without one: a card is
+ * moved between columns by dragging it or by Ctrl-arrowing it, and a touch screen
+ * offers neither. The card carries no status control of its own, so on a phone the
+ * board can be read but not worked — the list, where every ticket has a status
+ * select, is the one that can.
+ *
+ * Read once, at mount. Rotating a phone to landscape should not throw away the view
+ * the user has since chosen.
+ */
+const initialView = (): View =>
+  (typeof window !== 'undefined' && window.innerWidth < 640 ? 'list' : 'board');
+
 export function ManagerTicketsPage() {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -35,7 +50,7 @@ export function ManagerTicketsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
 
-  const [view, setView] = useState<View>('board');
+  const [view, setView] = useState<View>(initialView);
   const [status, setStatus] = useState(params.get('status') ?? 'unresolved');
   const [projectId, setProjectId] = useState('');
   const [reporterId, setReporterId] = useState('');
@@ -208,8 +223,8 @@ export function ManagerTicketsPage() {
 
       <div className="card">
         <div className="flex flex-col gap-3 border-b border-border p-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="segmented" role="tablist" aria-label="How to show tickets">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="segmented shrink-0" role="tablist" aria-label="How to show tickets">
               <button
                 type="button"
                 role="tab"
@@ -232,8 +247,8 @@ export function ManagerTicketsPage() {
 
             {/* Only the list needs a status filter; the board's columns are one. */}
             {view === 'list' && (
-              <div className="overflow-x-auto">
-                <div className="segmented min-w-max" role="tablist" aria-label="Filter tickets by status">
+              <div className="min-w-0">
+                <div className="segmented" role="tablist" aria-label="Filter tickets by status">
                   {STATUS_TABS.map((tab) => (
                     <button
                       key={tab.value || 'all'}
@@ -253,7 +268,7 @@ export function ManagerTicketsPage() {
           <SearchInput value={search} onChange={setSearch} placeholder="Search tickets, key or reporter" className="lg:w-72" />
         </div>
 
-        <div className="filter-bar grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <FilterPanel activeCount={[projectId, reporterId, severity].filter(Boolean).length}>
           <div>
             <label className="label" htmlFor="tf-project">Project</label>
             <Select id="tf-project" value={projectId} onChange={(v) => setProjectId(v)} options={[{ value: '', label: `All projects` }, ...projects.map((p) => ({ value: String(p.id), label: `${p.project_key} · ${p.name}` }))]} />
@@ -270,7 +285,7 @@ export function ManagerTicketsPage() {
             <label className="label" htmlFor="tf-sort">Sort</label>
             <Select id="tf-sort" value={sort} onChange={(v) => setSort(v)} options={[{ value: 'severity_desc', label: `Most severe first` }, { value: 'status_asc', label: `By status` }, { value: 'created_desc', label: `Newest first` }, { value: 'created_asc', label: `Oldest first` }]} />
           </div>
-        </div>
+        </FilterPanel>
 
         {loading ? (
           <LoadingBlock label="Loading tickets" rows={4} />

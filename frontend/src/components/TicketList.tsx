@@ -35,7 +35,7 @@ export function TicketList({
   };
 
   return (
-    <ul className="divide-y divide-border">
+    <ul className="stagger divide-y divide-border">
       {tickets.map((ticket) => {
         const isOpen = expanded.has(ticket.id);
         const settled = ticket.status === 'resolved' || ticket.status === 'closed';
@@ -61,6 +61,12 @@ export function TicketList({
               </button>
 
               <div className="min-w-0 flex-1">
+                {/*
+                  The key and the two badges take one line and the title takes the
+                  next, rather than all four wrapping unpredictably — at 360px the
+                  title otherwise ends up split across two lines with a badge
+                  stranded between them.
+                */}
                 <div className="flex flex-wrap items-center gap-2">
                   <span
                     className={`font-mono text-xs font-semibold ${
@@ -69,10 +75,10 @@ export function TicketList({
                   >
                     {ticket.ticket_key}
                   </span>
-                  <span className="min-w-0 font-medium text-foreground">{ticket.title}</span>
                   <SeverityBadge severity={ticket.severity} />
                   <TicketStatusBadge status={ticket.status} />
                 </div>
+                <p className="mt-1 font-medium text-foreground sm:mt-1.5">{ticket.title}</p>
 
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <span>
@@ -110,6 +116,44 @@ export function TicketList({
                   </div>
                 )}
 
+                {/*
+                  Phones only: the status select and delete, on a row of their own.
+
+                  In the right-hand column beside the text they left about 150px for a
+                  ticket key, a title and two badges. Below it they get the full width
+                  and the select can show a status name without truncating it.
+                */}
+                <div className="mt-3 flex items-center gap-2 sm:hidden">
+                  <div className="relative min-w-0 flex-1">
+                    <Select
+                      value={ticket.status}
+                      disabled={updatingId === ticket.id}
+                      ariaLabel={`Status for ${ticket.ticket_key}`}
+                      onChange={(v) => onStatusChange(ticket, v as TicketStatus)}
+                      options={(allowedStatuses.includes(ticket.status)
+                        ? allowedStatuses
+                        : [ticket.status, ...allowedStatuses]
+                      ).map((st) => ({ value: st, label: TICKET_STATUS_LABEL[st] }))}
+                    />
+                    {updatingId === ticket.id && (
+                      <span className="absolute right-8 top-1/2 -translate-y-1/2 text-muted-foreground">
+                        <Spinner className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </div>
+
+                  {onDelete && (
+                    <button
+                      type="button"
+                      onClick={() => onDelete(ticket)}
+                      aria-label={`Delete ${ticket.ticket_key}`}
+                      className="tap shrink-0 rounded p-2 text-muted-foreground active:bg-accent"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
                 {isOpen && (
                   <div className="mt-3 space-y-3">
                     <div className="rounded-lg border border-border bg-muted px-3.5 py-3">
@@ -144,7 +188,7 @@ export function TicketList({
                 )}
               </div>
 
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
                 <div className="relative">
                   <Select
                     value={ticket.status}

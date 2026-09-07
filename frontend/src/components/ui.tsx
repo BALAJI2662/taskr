@@ -3,8 +3,9 @@ import {
   type KeyboardEvent as ReactKeyboardEvent, type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2, Search, X, AlertCircle, RefreshCw, ChevronDown, Check } from 'lucide-react';
+import { Loader2, Search, X, AlertCircle, RefreshCw, ChevronDown, Check, SlidersHorizontal } from 'lucide-react';
 import { initials } from '../lib/format';
+import { usePresence } from '../lib/presence';
 import errorIllustration from '../assets/error-illustration.gif';
 
 /* ------------------------------------------------------------------ avatar */
@@ -74,13 +75,19 @@ export function StatCard({
         onClick ? 'card-hover cursor-pointer' : ''
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
+      {/*
+        The stat grids go two-across on a phone, which halves the width this has to
+        live in. The label drops to 12px and the figure to 24px there, and the icon
+        loses a little with them — at the desktop sizes a two-word label wraps onto
+        three lines and the card grows taller than the one beside it.
+      */}
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium leading-tight text-muted-foreground">{label}</p>
-          <p className="mt-2 text-3xl font-bold tabular-nums tracking-[-0.02em] text-foreground">{value}</p>
+          <p className="text-xs font-medium leading-tight text-muted-foreground sm:text-sm">{label}</p>
+          <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-[-0.02em] text-foreground sm:mt-2 sm:text-3xl">{value}</p>
           {hint && <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>}
         </div>
-        <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${accents[accent]}`}>
+        <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-9 sm:w-9 ${accents[accent]}`}>
           {icon}
         </span>
       </div>
@@ -273,6 +280,11 @@ export function Modal({
   size?: 'sm' | 'md' | 'lg';
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  /*
+    Held in the tree for the length of its exit animation, so closing a dialog looks
+    like it leaving rather than the screen cutting.
+  */
+  const { present, leaving, onAnimationEnd } = usePresence(open);
 
   // Escape closes, and the page behind is locked so the modal is the only thing
   // that scrolls while it is open.
@@ -289,26 +301,44 @@ export function Modal({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!present) return null;
 
   const widths = { sm: 'max-w-md', md: 'max-w-2xl', lg: 'max-w-4xl' };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+        className={`absolute inset-0 bg-black/50 backdrop-blur-[2px] ${
+          leaving ? 'animate-scrim-out' : 'animate-scrim-in'
+        }`}
         onClick={onClose}
         aria-hidden
       />
+      {/*
+        A bottom sheet on a phone and a centred dialog from `sm` up. The mobile form
+        rises from the edge it is anchored to rather than fading in place, which is
+        what says it can be sent back the same way; on a desktop it keeps the smaller
+        `animate-in-up` lift, where a full-height slide would be theatre.
+
+        `safe-pb` keeps the footer's buttons above the home indicator — without it the
+        primary action in every form sits under the gesture bar.
+      */}
       <div
         ref={panelRef}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`animate-in-up relative w-full ${widths[size]} max-h-[92vh] overflow-hidden rounded-t-3xl sm:rounded-3xl bg-card shadow-2xl outline-none flex flex-col`}
+        onAnimationEnd={onAnimationEnd}
+        className={`sheet safe-pb relative w-full sm:pb-0 ${widths[size]} ${
+          leaving
+            ? 'animate-sheet-down sm:animate-out-down'
+            : 'animate-sheet-up sm:animate-in-up'
+        }`}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+        <div className="sheet-handle" aria-hidden />
+
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-5 py-4">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-foreground">{title}</h2>
             {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
@@ -317,15 +347,80 @@ export function Modal({
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="tap shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5" data-scroll>{children}</div>
 
-        {footer && <div className="border-t border-border bg-muted px-5 py-4">{footer}</div>}
+        {/*
+          The footer holds the form's actions, so on a phone they go full width and
+          stack — a row of two buttons at 360px leaves each about 150px, and the one
+          that cancels ends up the same size as the one that submits.
+        */}
+        {footer && (
+          <div className="shrink-0 border-t border-border bg-muted px-5 py-4">{footer}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------- filter panel */
+
+/**
+ * The strip of filters under a page's tabs — collapsible on a phone, always open on
+ * a desktop.
+ *
+ * Four selects stacked is roughly 280px, which on an 812px screen is most of what is
+ * left after the header and the tab bar. That is a lot of room for controls you set
+ * once and then read past, so below `lg` they fold behind a summary row and the list
+ * they filter starts near the top of the screen. From `lg` up nothing changes: the
+ * grid is drawn open and the summary row is not rendered at all.
+ *
+ * `activeCount` is what makes collapsing safe. A hidden filter that is doing
+ * something is a bug report waiting to happen — "it is not showing my tasks" — so the
+ * closed row carries the number of filters currently narrowing the list.
+ */
+export function FilterPanel({
+  activeCount = 0, gridClassName = 'sm:grid-cols-2 lg:grid-cols-4', children,
+}: {
+  activeCount?: number;
+  /** Column counts for the open grid; pages differ in how many filters they have. */
+  gridClassName?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="border-b border-border bg-muted/50">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-foreground lg:hidden"
+      >
+        <span className="flex items-center gap-2">
+          <SlidersHorizontal className="h-4 w-4 text-muted-foreground" aria-hidden />
+          Filters
+          {activeCount > 0 && (
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold tabular-nums text-primary-foreground">
+              {activeCount}
+            </span>
+          )}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+      </button>
+
+      <div
+        className={`gap-4 px-4 pb-4 lg:grid lg:p-4 ${gridClassName} ${open ? 'grid' : 'hidden'}`}
+      >
+        {children}
       </div>
     </div>
   );
@@ -337,12 +432,21 @@ export function PageHeader({
   title, subtitle, actions,
 }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <h1 className="display-title text-2xl sm:text-4xl text-foreground">{title}</h1>
-        {subtitle && <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>}
+        <h1 className="display-title text-xl text-foreground sm:text-3xl lg:text-4xl">{title}</h1>
+        {subtitle && <p className="mt-1.5 text-sm text-muted-foreground sm:mt-2">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {/*
+        Actions scroll on one line rather than wrapping into a second and third row.
+        Two or three buttons stacked above the content push the page's actual subject
+        off the first screen, which is the thing a phone has least of.
+      */}
+      {actions && (
+        <div className="hide-scrollbar -mx-4 flex shrink-0 items-center gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
+          {actions}
+        </div>
+      )}
     </div>
   );
 }
@@ -540,9 +644,15 @@ export function Select({
   const listId = id ? id + '-listbox' : undefined;
 
   /*
-    Four rows at 2.25rem each, plus the list's own 0.5rem of padding.
+    How tall the menu is allowed to get, which the flip decision below needs in pixels.
+
+    A row is 2.25rem with a mouse and 2.75rem under a finger, so the same four rows
+    plus the list's own 0.5rem of padding come out at two different heights. Using the
+    desktop number on a phone would have the menu decide it fits below when it does
+    not, and open downwards off the bottom of the screen.
   */
-  const MENU_MAX = 152;
+  const isPhone = typeof window !== 'undefined' && window.innerWidth < 640;
+  const MENU_MAX = isPhone ? 240 : 152;
 
   /*
     Where the menu goes, in viewport coordinates.
@@ -610,15 +720,15 @@ export function Select({
           role="listbox"
           tabIndex={-1}
           /*
-            Four rows and no more: each is 2.25rem, and the list's own padding adds
-            0.5rem. A fifth row is then half in view, which is what says the list
-            scrolls — a clean cut at the boundary reads as the end of the options.
+            Four rows and no more, at whichever row height applies — see MENU_MAX. A
+            fifth row is then half in view, which is what says the list scrolls; a
+            clean cut at the boundary reads as the end of the options.
           */
           style={{
             position: 'fixed',
             left: rect.left,
             width: rect.width,
-            maxHeight: '9.5rem',
+            maxHeight: MENU_MAX,
             ...(dropUp
               ? { bottom: Math.max(viewportH - rect.top + 6, 0) }
               : { top: rect.bottom + 6 }),
@@ -638,7 +748,7 @@ export function Select({
                 aria-selected={isSelected}
                 onMouseEnter={() => setActive(i)}
                 onMouseDown={(e) => { e.preventDefault(); commit(i); }}
-                className={`flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm transition-colors ${
+                className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm transition-colors sm:min-h-0 ${
                   isSelected
                     ? 'bg-accent font-medium text-accent-foreground'
                     : i === active

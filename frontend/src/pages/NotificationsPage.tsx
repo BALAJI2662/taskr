@@ -96,7 +96,7 @@ export function NotificationsPage() {
             }
           />
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="stagger divide-y divide-border">
             {visible.map((n) => {
               const clickable = Boolean(n.related_task_id || n.related_ticket_id);
               const Tag = clickable ? 'button' : 'div';

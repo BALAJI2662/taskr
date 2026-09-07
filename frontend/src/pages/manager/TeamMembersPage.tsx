@@ -215,7 +215,12 @@ export function TeamMembersPage() {
 
       {/* The Admins list is administration, so a manager is not offered the tab at all. */}
       {canAdminister && (
-        <div className="flex gap-1" role="tablist" aria-label="People">
+        <div
+          /* Scrolls rather than wrapping, as on the employee detail page. */
+          className="hide-scrollbar -mx-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+          role="tablist"
+          aria-label="People"
+        >
           {([
             { key: 'team' as const, label: 'Team Members', icon: <Users className="h-4 w-4" />, count: members.length },
             { key: 'admins' as const, label: 'Admins', icon: <ShieldCheck className="h-4 w-4" />, count: admins.length },
@@ -226,7 +231,7 @@ export function TeamMembersPage() {
               role="tab"
               aria-selected={tab === t.key}
               onClick={() => { setTab(t.key); setSearch(''); setDepartment(''); }}
-              className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-semibold
                 transition-all duration-200 ease-out active:scale-[0.97] ${
                 tab === t.key
                   ? 'border-primary bg-primary text-primary-foreground shadow-sm '
@@ -292,7 +297,88 @@ export function TeamMembersPage() {
               ) : undefined}
             />
           ) : (
-            <div className="table-wrap p-4 sm:p-0">
+            <>
+              {/*
+                Seven columns of roster do not fit a phone, and the three counts are
+                the point of the row — so on a card they become a band of three
+                figures under the name rather than three columns you have to scroll
+                sideways to reach and then cannot label.
+              */}
+              <ul className="stagger space-y-3 p-4 lg:hidden">
+                {members.map((m) => (
+                  <li key={m.id} className="data-card">
+                    <Link to={`/manager/team/${m.id}`} className="press flex items-center gap-3">
+                      <Avatar name={m.name} src={m.profile_image} />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="truncate font-semibold text-foreground">{m.name}</span>
+                          {m.invited && (
+                            <span className="badge shrink-0 border-warning/25 bg-warning/10 text-warning">Invited</span>
+                          )}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {m.email}
+                          {m.department && <span> · {m.department}</span>}
+                        </span>
+                      </span>
+                      <Eye className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                    </Link>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-muted/60 py-2 text-center">
+                      <MiniStat label="Assigned" value={m.counts.total} />
+                      <MiniStat label="Pending" value={m.counts.pending} />
+                      <MiniStat label="Completed" value={m.counts.completed} />
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-3 border-t border-border pt-2.5">
+                      {m.submitted_today ? (
+                        <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-success">
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                          <span className="truncate">Submitted today</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-warning">
+                          <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                          <span className="truncate">
+                            {m.last_report_date ? `Last ${formatDateShort(m.last_report_date)}` : 'No report yet'}
+                          </span>
+                        </span>
+                      )}
+
+                      {canAdminister && (
+                        <div className="ml-auto flex shrink-0 items-center gap-1">
+                          <Toggle
+                            checked={m.is_active}
+                            disabled={savingAccess === m.id}
+                            onChange={() => void setAccess(m, 'member')}
+                            label={m.is_active
+                              ? `Block ${m.name}'s access to the portal`
+                              : `Restore ${m.name}'s access to the portal`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditing(m)}
+                            aria-label={`Edit ${m.name}`}
+                            className="tap rounded-md p-1.5 text-muted-foreground active:bg-accent"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmRemove(m)}
+                            aria-label={`Remove ${m.name}`}
+                            className="tap rounded-md p-1.5 text-muted-foreground active:bg-accent"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="table-wrap hidden p-4 sm:p-0 lg:block">
               <table className="table">
                 <thead>
                   <tr>
@@ -396,7 +482,8 @@ export function TeamMembersPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </>
           )
         ) : admins.length === 0 ? (
           <EmptyState
@@ -413,7 +500,85 @@ export function TeamMembersPage() {
           />
         ) : (
           <>
-            <div className="table-wrap p-4 sm:p-0">
+            {/* The same treatment as the roster above: eight columns become a card. */}
+            <ul className="stagger space-y-3 p-4 lg:hidden">
+              {admins.map((a) => (
+                <li key={a.id} className="data-card">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={a.name} src={a.profile_image} />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="truncate font-semibold text-foreground">{a.name}</span>
+                        {a.id === user?.id && (
+                          <span className="badge border-primary/25 bg-primary/10 text-primary-strong">You</span>
+                        )}
+                        {a.invited && (
+                          <span className="badge shrink-0 border-warning/25 bg-warning/10 text-warning">Invited</span>
+                        )}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {a.email}
+                        {a.department && <span> · {a.department}</span>}
+                      </span>
+                    </span>
+                    <span className={a.role === 'admin'
+                      ? 'badge shrink-0 border-info/25 bg-info/10 text-info'
+                      : 'badge shrink-0 border-border bg-muted text-muted-foreground'}
+                    >
+                      {roleLabel(a.role)}
+                    </span>
+                  </div>
+
+                  <dl className="mt-3 space-y-1.5 border-t border-border pt-2.5">
+                    {a.job_title && (
+                      <div className="data-card-row">
+                        <dt className="data-card-label">Job title</dt>
+                        <dd className="data-card-value">{a.job_title}</dd>
+                      </div>
+                    )}
+                    <div className="data-card-row">
+                      <dt className="data-card-label">Tasks assigned</dt>
+                      <dd className="data-card-value font-semibold tabular-nums">{a.assigned_tasks}</dd>
+                    </div>
+                    <div className="data-card-row">
+                      <dt className="data-card-label">Still open</dt>
+                      <dd className="data-card-value tabular-nums">{a.open_tasks}</dd>
+                    </div>
+                    <div className="data-card-row">
+                      <dt className="data-card-label">Added</dt>
+                      <dd className="data-card-value">{formatDate(a.created_at)}</dd>
+                    </div>
+                  </dl>
+
+                  {/* Nothing to act on for your own row — see the table below. */}
+                  {a.id !== user?.id && (
+                    <div className="mt-3 flex items-center gap-3 border-t border-border pt-2.5">
+                      <span className="text-xs font-medium text-muted-foreground">Portal access</span>
+                      <div className="ml-auto flex shrink-0 items-center gap-1">
+                        <Toggle
+                          checked={a.is_active}
+                          disabled={savingAccess === a.id}
+                          onChange={() => void setAccess(a, 'admin')}
+                          label={a.is_active
+                            ? `Block ${a.name}'s access to the portal`
+                            : `Restore ${a.name}'s access to the portal`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setConfirmRemoveAdmin(a)}
+                          aria-label={`Remove ${a.name}`}
+                          className="tap rounded-md p-1.5 text-muted-foreground active:bg-accent"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            <div className="table-wrap hidden p-4 sm:p-0 lg:block">
               <table className="table">
                 <thead>
                   <tr>
@@ -638,6 +803,24 @@ export function TeamMembersPage() {
         departments={departments}
         onCreated={reloadBoth}
       />
+    </div>
+  );
+}
+
+/**
+ * One of the three counts in a roster card's figure band.
+ *
+ * The figure leads and the word explains it, which is the reverse of the table where
+ * the heading is a column away. At this size the label has to sit under the number it
+ * belongs to or it is not attached to anything.
+ */
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-base font-bold tabular-nums leading-none text-foreground">{value}</p>
+      <p className="mt-1 truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
     </div>
   );
 }

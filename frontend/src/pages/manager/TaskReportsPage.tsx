@@ -4,7 +4,7 @@ import { FileText, CheckCircle2, Search } from 'lucide-react';
 import { reportApi, teamApi } from '../../api/endpoints';
 import { useAuth } from '../../context/AuthContext';
 import { ApiError } from '../../api/client';
-import { Avatar, EmptyState, ErrorState, LoadingBlock, PageHeader, SearchInput, Select } from '../../components/ui';
+import { Avatar, EmptyState, ErrorState, FilterPanel, LoadingBlock, PageHeader, SearchInput, Select } from '../../components/ui';
 import { formatDate, formatTime, reportLines, todayIso } from '../../lib/format';
 import type { DailyReport, TeamMember } from '../../types';
 import { isAdmin } from '../../types';
@@ -109,7 +109,9 @@ export function TaskReportsPage() {
           <SearchInput value={search} onChange={setSearch} placeholder="Search report text or employee" className="lg:w-72" />
         </div>
 
-        <div className="filter-bar grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <FilterPanel
+          activeCount={[employeeId, department, range === 'custom' ? from || to : ''].filter(Boolean).length}
+        >
           <div>
             <label className="label" htmlFor="rp-employee">Employee</label>
             <Select id="rp-employee" value={employeeId} onChange={(v) => setEmployeeId(v)} options={[{ value: '', label: `All employees` }, ...members.map((m) => ({ value: String(m.id), label: `${m.name}` }))]} />
@@ -133,7 +135,7 @@ export function TaskReportsPage() {
               </div>
             </>
           )}
-        </div>
+        </FilterPanel>
 
         {/* Same reserved height as the populated list, so filtering does not resize
             the card. */}
@@ -164,7 +166,7 @@ export function TaskReportsPage() {
           <div className="divide-y divide-border">
             {dates.map((date) => (
               <section key={date}>
-                <h2 className="sticky top-16 z-10 border-b border-primary/20 bg-muted/95 px-5 py-2.5 text-sm font-semibold text-primary-strong backdrop-blur">
+                <h2 className="under-header sticky z-10 border-b border-primary/20 bg-muted/95 px-4 py-2.5 text-sm font-semibold text-primary-strong backdrop-blur sm:px-5">
                   {formatDate(date)}
                   <span className="ml-2 font-normal text-muted-foreground">
                     · {grouped[date].length} report{grouped[date].length === 1 ? '' : 's'}
@@ -172,10 +174,13 @@ export function TaskReportsPage() {
                 </h2>
                 <ul className="divide-y divide-border">
                   {grouped[date].map((report) => (
-                    <li key={report.id} className="flex gap-4 px-5 py-4">
-                      <Avatar name={report.employee_name} size="md" />
+                    <li key={report.id} className="flex gap-3 px-4 py-4 sm:gap-4 sm:px-5">
+                      <Avatar name={report.employee_name} size="md" className="hidden sm:inline-flex" />
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        {/* `flex-col` on a phone: the name and the timestamp cannot
+                            share a baseline at 360px without one of them truncating
+                            to nothing. */}
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
                           <Link
                             to={`/manager/team/${report.employee_id}`}
                             className="font-semibold text-foreground hover:text-primary-strong"

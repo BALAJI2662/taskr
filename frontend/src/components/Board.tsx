@@ -62,7 +62,13 @@ export function Board<T>({
   };
 
   return (
-    <div className="flex items-stretch gap-4 overflow-x-auto p-4">
+    /*
+      Snap points and a hidden scrollbar: on a phone the board is swiped one column at
+      a time, and a column that stops half-way across the screen is the clearest sign
+      a layout was built for a mouse. `snap-x` makes each swipe land on a column
+      edge. Above `sm` the snapping is dropped — with a trackpad it fights the user.
+    */
+    <div className="hide-scrollbar flex snap-x snap-mandatory items-stretch gap-3 overflow-x-auto p-3 sm:snap-none sm:gap-4 sm:p-4">
       {columns.map((column, columnIndex) => {
         const active = over === column.key && canDrop(column);
         return (
@@ -85,7 +91,13 @@ export function Board<T>({
               setDragging(null);
               if (item) onMove(item, column.key);
             }}
-            className={`flex w-72 shrink-0 flex-col rounded-xl border p-3 transition-colors ${
+            /*
+              `w-[85vw]` on a phone leaves the next column just visible at the edge,
+              which is what says the board continues sideways; a full-width column
+              looks like the only one there is. It is capped at the desktop width so
+              a tablet does not get a 700px column.
+            */
+            className={`flex w-[85vw] max-w-72 shrink-0 snap-start flex-col rounded-xl border p-3 transition-colors sm:w-72 ${
               active ? 'border-primary bg-primary/10' : 'border-border bg-muted/50'
             }`}
           >
@@ -124,7 +136,7 @@ export function Board<T>({
                         if (e.key === 'ArrowLeft') { e.preventDefault(); moveByKey(item, columnIndex, -1); }
                         if (e.key === 'ArrowRight') { e.preventDefault(); moveByKey(item, columnIndex, 1); }
                       }}
-                      className={`relative cursor-grab rounded-lg border border-border bg-card p-3 shadow-sm transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      className={`relative rounded-lg border border-border bg-card p-3 shadow-sm transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:cursor-grab ${
                         busy ? 'opacity-60' : 'hover:shadow-md active:cursor-grabbing'
                       } ${dragging?.id === id ? 'opacity-40' : ''}`}
                     >

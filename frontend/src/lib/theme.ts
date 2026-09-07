@@ -30,8 +30,21 @@ export function currentTheme(): Theme {
   return storedTheme() ?? systemTheme();
 }
 
+/**
+ * What the browser tints its own chrome with on a phone — the address bar in Chrome,
+ * the area behind the status bar once the app is installed to a home screen. Left
+ * unchanged it would keep the light value through a switch to dark, which reads as a
+ * white bar sitting above a black app.
+ *
+ * These two are `--background` from index.css. They are repeated rather than read from
+ * the custom property because the same pair is inlined in index.html's pre-paint
+ * script, which has no stylesheet to read from yet.
+ */
+const CHROME_COLOR: Record<Theme, string> = { light: '#ffffff', dark: '#09090b' };
+
 export function applyTheme(theme: Theme) {
   document.documentElement.classList.toggle('dark', theme === 'dark');
   document.documentElement.style.colorScheme = theme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', CHROME_COLOR[theme]);
   try { localStorage.setItem(KEY, theme); } catch { /* nothing to do */ }
 }

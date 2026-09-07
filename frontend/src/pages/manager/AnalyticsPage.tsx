@@ -87,7 +87,7 @@ function WeekBars({ points, selected, onSelect, unit }: {
   const peak = Math.max(1, ...points.map((p) => p.value));
   return (
     <div className="mt-6">
-      <div className="flex h-40 items-end gap-1.5 sm:gap-2">
+      <div className="flex h-32 items-end gap-1 sm:h-40 sm:gap-2">
         {points.map((p, i) => {
           const active = i === selected;
           /* A floor, so a day with no activity is still a bar to aim at rather than
@@ -121,7 +121,7 @@ function WeekBars({ points, selected, onSelect, unit }: {
         {points.map((p, i) => (
           <span
             key={p.key}
-            className={`flex-1 text-center text-xs ${
+            className={`min-w-0 flex-1 truncate text-center text-[10px] sm:text-xs ${
               i === selected ? 'font-semibold text-foreground' : 'text-muted-foreground'
             }`}
           >
@@ -277,9 +277,11 @@ export function AnalyticsPage() {
       {/* Title row — the screen name, then the controls that change what it shows. */}
       <header className="flex flex-wrap items-center gap-3">
         <span className="icon-btn" aria-hidden><BarChart3 className="h-5 w-5" /></span>
-        <h1 className="display-title text-3xl text-foreground sm:text-4xl">Analytics</h1>
+        <h1 className="display-title text-2xl text-foreground sm:text-3xl lg:text-4xl">Analytics</h1>
 
-        <div className="ml-auto flex items-center gap-2">
+        {/* `w-full` on a phone: the two controls take a row of their own beneath the
+            title rather than being squeezed in beside it and wrapping mid-control. */}
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           {/*
             The one control that changes what everything below means, so it is the one
             that takes the primary — and only once a filter is actually on.
@@ -293,7 +295,7 @@ export function AnalyticsPage() {
             <SlidersHorizontal className="h-4 w-4" />
             Filters
           </button>
-          <div className="segmented">
+          <div className="segmented ml-auto sm:ml-0">
             {(['daily', 'weekly'] as const).map((v) => (
               <button
                 key={v}
@@ -311,7 +313,7 @@ export function AnalyticsPage() {
       {/* The filters stay collapsed by default: on the reference this row is two
           controls, and four permanent form fields would be the first thing on the page. */}
       {filtersOpen && (
-        <div className="card fade-in grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="card fade-in grid gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
           <div>
             <label className="label" htmlFor="a-employee">Employee</label>
             <Select id="a-employee" value={employeeId} onChange={(v) => setEmployeeId(v)} options={[{ value: '', label: `All employees` }, ...members.map((m) => ({ value: String(m.id), label: `${m.name}` }))]} />
@@ -373,7 +375,7 @@ export function AnalyticsPage() {
         The reserved height keeps the stack from collapsing behind the loader.
       */}
       {loading || !summary ? (
-        <div className="card flex min-h-[560px] items-center justify-center" aria-busy="true" aria-live="polite">
+        <div className="card flex min-h-[320px] items-center justify-center sm:min-h-[560px]" aria-busy="true" aria-live="polite">
           <Spinner className="h-8 w-8 text-muted-foreground" />
           <span className="sr-only">Loading analytics</span>
         </div>
@@ -478,7 +480,7 @@ export function AnalyticsPage() {
                 {view === 'daily' ? 'Last 30 days' : 'Last 8 weeks'} — assignments, completions and reports.
               </p>
             </div>
-            <div className="mt-4 h-64 w-full">
+            <div className="mt-4 h-52 w-full sm:h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trend} margin={{ top: 5, right: 8, left: -18, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
@@ -554,7 +556,7 @@ export function AnalyticsPage() {
           {!hasTasks ? (
             <EmptyState icon={<Users className="h-6 w-6" />} title="No task data for these filters" description="Try widening the date range." />
           ) : (
-            <div className="mt-4 h-72 w-full">
+            <div className="mt-4 h-56 w-full sm:h-72">
               <ResponsiveContainer width="100%" height="100%">
                 {/*
                   `maxBarSize` caps how wide a bar may be drawn. Without it recharts
@@ -601,7 +603,42 @@ export function AnalyticsPage() {
           {productivity.length === 0 ? (
             <EmptyState icon={<Users className="h-6 w-6" />} title="No team members match these filters" />
           ) : (
-            <div className="table-wrap p-4 sm:p-0">
+            <>
+              {/*
+                Eight numeric columns is the widest table in the app. As cards the
+                five counts become a band of figures and the completion bar gets the
+                full width, which is the one value here that is read as a shape
+                rather than a number.
+              */}
+              <ul className="stagger space-y-3 p-4 lg:hidden">
+                {productivity.map((p) => (
+                  <li key={p.employee_id} className="data-card">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="min-w-0 truncate font-semibold text-foreground">{p.employee_name}</p>
+                      <p className="shrink-0 text-xs text-muted-foreground">{p.department || '—'}</p>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-5 gap-1 rounded-lg bg-muted/60 py-2 text-center">
+                      <ChipStat label="All" value={p.assigned} />
+                      <ChipStat label="Pend" value={p.pending} />
+                      <ChipStat label="Prog" value={p.in_progress} />
+                      <ChipStat label="Done" value={p.completed} tone="text-success" />
+                      <ChipStat label="Over" value={p.overdue} tone={p.overdue > 0 ? 'text-destructive' : undefined} />
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${p.completion_rate}%` }} />
+                      </div>
+                      <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+                        {p.completion_rate}%
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="table-wrap hidden p-4 sm:p-0 lg:block">
               <table className="table">
                 <thead>
                   <tr>
@@ -637,11 +674,31 @@ export function AnalyticsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </>
           )}
         </section>
       </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * One figure in a productivity card's band of five.
+ *
+ * The labels are clipped to four characters — "Pend", "Prog" — because five columns
+ * on a 360px screen leave about 60px each, and a wrapped "In Progress" would make the
+ * band twice as tall as the numbers it is labelling. The table above keeps the full
+ * words, and that is the version anyone reading carefully will be on.
+ */
+function ChipStat({ label, value, tone }: { label: string; value: number; tone?: string }) {
+  return (
+    <div className="min-w-0">
+      <p className={`text-sm font-bold tabular-nums leading-none ${tone ?? 'text-foreground'}`}>{value}</p>
+      <p className="mt-1 truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
     </div>
   );
 }

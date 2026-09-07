@@ -95,6 +95,10 @@
   --chart-3: #a1a1aa;
   --chart-4: #d4d4d8;
   --chart-5: #18181b;
+
+  /* The band of light that sweeps a loading placeholder. Shade across a light
+     surface here; the dark theme flips it to light across a dark one. */
+  --shimmer: rgb(0 0 0 / 0.055);
 }
 
 /*
@@ -170,6 +174,9 @@
   --chart-3: #71717a;
   --chart-4: #52525b;
   --chart-5: #fafafa;
+
+  /* Light sweeping across a dark placeholder rather than shade across a light one. */
+  --shimmer: rgb(255 255 255 / 0.06);
 }
 
 @theme inline {
@@ -229,12 +236,112 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
+/*
+  ---------------------------------------------------------------------------
+  Phone geometry.
+
+  `env(safe-area-inset-*)` is 0 everywhere except on a device that actually has a
+  notch or a home indicator, so these are safe to apply unconditionally — on a
+  desktop they resolve to nothing. They are aliased here so a component can write
+  `pb-[var(--safe-b)]` without repeating the `env()` fallback dance, and because
+  `env()` cannot be used inside a Tailwind arbitrary value directly.
+
+  `--bottom-nav-h` is the height of the mobile tab bar. The layout's main region
+  reserves exactly this much room beneath itself, so the last row of a list is never
+  parked under the bar where it cannot be tapped.
+  ---------------------------------------------------------------------------
+*/
+:root {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+
+  /*
+    64px, not 56. At 56 the bar could hold a 28px pill and an 11px label only by
+    squeezing both against its edges; the extra 8px is what lets the pill sit in the
+    middle of its own space and the label breathe under it.
+  */
+  --bottom-nav-h: 4rem;
+  /* The air between the floating bar and the bottom edge of the screen. */
+  --bottom-nav-gap: 0.75rem;
+
+  /*
+    Motion.
+
+    Three curves, and every animation in the app picks one of them. Naming them here
+    rather than inlining `cubic-bezier(...)` at each call site is what keeps a screen
+    transition, a pressed card and a sheet arriving feeling like the same product
+    moving, rather than three developers' guesses about easing.
+
+    `--ease-out` decelerates into place: for anything entering or settling, which is
+    most of it. `--ease-in` accelerates away, for anything leaving — a thing that
+    exits should look like it is going somewhere, not fading out where it stands.
+    `--ease-spring` overshoots very slightly, and is reserved for the few places
+    where a small element lands: the tab bar's pill, a toggle's knob.
+  */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.35, 0.5, 1);
+}
+
 @layer base {
-  html { -webkit-text-size-adjust: 100%; }
+  html {
+    -webkit-text-size-adjust: 100%;
+    /*
+      A phone browser's chrome shrinks as you scroll, so `100vh` is taller than what
+      you can actually see and the bottom of a full-height screen sits under the
+      address bar. `100dvh` is the live value. The `vh` line stays first as the
+      fallback for anything that has not shipped `dvh`.
+    */
+    height: 100vh;
+    height: 100dvh;
+  }
 
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
+    /*
+      A single stray wide element used to make the whole page slide sideways, which on
+      a phone is indistinguishable from the app being broken. Anything genuinely wider
+      than the screen — a table, the board, the timeline — scrolls inside its own
+      container instead, so nothing legitimate is lost by pinning the page itself.
+    */
+    overflow-x: hidden;
+    /*
+      Stops the rubber-band bounce revealing a blank strip past the top and bottom of
+      the app, which is the clearest tell that a page is a web page.
+    */
+    overscroll-behavior-y: none;
+  }
+
+  /*
+    Tapping in a mobile browser paints a translucent grey box over whatever was
+    touched, on top of whatever `:active` styling the component already has. The app
+    gives every interactive element its own pressed state, so the default is
+    suppressed rather than fighting it.
+  */
+  :where(a, button, [role='button'], [role='switch'], [role='option'], summary, label) {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /*
+    iOS Safari zooms the page in when a field smaller than 16px takes focus, and then
+    does not zoom back out. Every text-entry control is therefore 16px on a phone and
+    drops to the design's 14px from `sm` up, where no such zoom exists.
+  */
+  @media (max-width: 639px) {
+    :where(input, select, textarea) { font-size: 16px; }
+  }
+
+  /*
+    Anything scrollable keeps iOS momentum and stops a scroll that reaches its end
+    from continuing into the page behind it — which is what makes a bottom sheet drag
+    the page underneath once its own list runs out.
+  */
+  :where([data-scroll]) {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
   /*
@@ -262,11 +369,21 @@
   to { opacity: 1; transform: none; }
 }
 
-/* Anyone who has asked for less motion gets the state change without the movement. */
+/*
+  Anyone who has asked for less motion gets the state change without the movement.
+
+  `animation-delay` is zeroed alongside the durations. Without it a staggered list
+  still assembles over a quarter of a second — each row appearing at its appointed
+  time, just instantly rather than smoothly — which is the flicker the setting exists
+  to avoid. Durations are collapsed rather than set to `none` so that `animationend`
+  still fires: the dialogs unmount themselves when their exit animation finishes, and
+  an animation that never runs is one that never ends.
+*/
 @media (prefers-reduced-motion: reduce) {
   .fade-in { animation: none; }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
   }
 }
@@ -276,8 +393,15 @@
     @apply bg-card text-card-foreground rounded-xl border border-border shadow-sm;
   }
 
+  /*
+    A card that can be pressed lifts under a pointer and sinks under a finger. The
+    press is deliberately smaller than the lift — it should register as contact, not
+    as the card jumping.
+  */
   .card-hover {
-    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md;
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md
+           active:translate-y-0 active:scale-[0.985] active:shadow-sm;
+    transition-timing-function: var(--ease-out);
   }
 
   /* The uppercase display heading. Weight and case carry a title here; colour does not. */
@@ -294,21 +418,29 @@
     Tailwind v4 cannot @apply one component class inside another, so each variant
     repeats the shared base rather than extending `.btn`.
   */
+  /*
+    `min-h-11` is 44px, the smallest target a finger hits reliably. It applies on
+    phones only and relaxes to the design's own height from `sm` up, where the pointer
+    is a mouse and 36px was never a problem.
+  */
   .btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium
            transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed
-           disabled:active:scale-100 whitespace-nowrap;
+           disabled:active:scale-100 whitespace-nowrap sm:min-h-0;
   }
   .btn-primary { @apply bg-primary text-primary-foreground shadow-sm hover:bg-primary/90; }
   .btn-secondary { @apply bg-background text-foreground border border-border shadow-sm hover:bg-accent hover:text-accent-foreground; }
   .btn-ghost { @apply text-muted-foreground hover:bg-accent hover:text-accent-foreground; }
   .btn-danger { @apply bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90; }
-  .btn-sm { @apply px-3 py-1.5 text-xs; }
+  /* Small enough that the 44px floor would distort it, so it opts out and relies on
+     the `.tap` halo below wherever it sits in a dense row. */
+  .btn-sm { @apply min-h-0 px-3 py-1.5 text-xs; }
 
 /* The round icon button that marks a screen. Neutral: it is chrome, not an action. */
   .icon-btn {
-    @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full
-           bg-foreground text-background transition-transform active:scale-95 hover:bg-foreground/90;
+    @apply inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full
+           bg-foreground text-background transition-transform active:scale-95 hover:bg-foreground/90
+           sm:h-10 sm:w-10;
   }
 
   /*
@@ -317,7 +449,8 @@
     three is what makes a field look like it snaps.
   */
   .input {
-    @apply w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm
+    @apply w-full min-h-11 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm
+           sm:min-h-0
            placeholder:text-muted-foreground transition-all duration-200 ease-out
            hover:border-muted-foreground/40 focus:border-ring
            disabled:bg-muted disabled:text-muted-foreground disabled:hover:border-input;
@@ -347,9 +480,16 @@
   .hint { @apply text-xs text-muted-foreground mt-1.5; }
   .field-error { @apply text-xs text-destructive mt-1.5; }
 
+  /*
+    Badges carry status, and status changes under the user — a ticket moves to
+    Resolved, a task to Overdue. Tweening the colour means the change is something
+    you can see happen rather than something you notice has happened.
+  */
   .badge {
     @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium
            border whitespace-nowrap;
+    transition: background-color 220ms var(--ease-out), border-color 220ms var(--ease-out),
+                color 220ms var(--ease-out);
   }
 
   /*
@@ -358,22 +498,63 @@
     active item in a tab list. The coral is not needed to say "this one": position and
     elevation already do.
   */
-  .segmented { @apply inline-flex gap-1 rounded-lg bg-muted p-1; }
+  /*
+    `max-w-full` with a scroll rather than `flex-wrap`: a wrapped segmented control
+    stops reading as one track, and these have at most four items, which scroll in a
+    single short drag.
+  */
+  .segmented {
+    @apply inline-flex max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1;
+    scrollbar-width: none;
+  }
+  .segmented::-webkit-scrollbar { display: none; }
   .segmented-item {
-    @apply rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground
-           transition-all duration-200 ease-out hover:text-foreground;
+    @apply shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium text-muted-foreground
+           transition-all duration-200 ease-out hover:text-foreground sm:py-1.5;
   }
   .segmented-item-active {
     @apply bg-background text-foreground shadow-sm hover:text-foreground;
   }
 
+  /*
+    The segmented control standing on the page rather than inside a card.
+
+    `.segmented`'s track is `bg-muted`, which is also this app's page background — so
+    on a page the track is invisible and the items appear to float with nothing
+    holding them together. This lifts it onto the card surface with a border, the way
+    every other control that sits directly on the page is drawn. Inside a `.card`,
+    where muted already contrasts, the plain `.segmented` is still the right one.
+  */
+  .segmented-raised {
+    @apply border border-border bg-card;
+  }
+
+  /*
+    The same selection, in the primary colour.
+
+    The dashboard's period control marks its choice with the coral rather than the
+    neutral pill: on that screen the control is the one thing deciding what every
+    figure beneath it means, so it is the one segmented control that earns the
+    accent. It inherits `.segmented-item`'s track, padding and easing — only the
+    fill differs — and is declared after it so it wins inside the components layer.
+  */
+  .segmented-item-primary {
+    @apply bg-primary text-primary-foreground shadow-sm hover:text-primary-foreground;
+  }
+
   /* The filter strip that sits under a page's tabs. */
   .filter-bar { @apply border-b border-border bg-muted/50 p-4; }
 
+  /*
+    Kept for the few tables that stay tables on a phone — short ones, where every
+    column fits. Anything wider renders a `.data-card` list below `lg` instead; a
+    horizontally scrolled table separates a value from its header, which is the one
+    thing that makes a table unreadable rather than merely cramped.
+  */
   .table-wrap {
-    /* Tables stay readable on phones by scrolling inside their own container
-       rather than stretching the page. */
-    @apply overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0;
+    @apply -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
   }
   .table { @apply w-full min-w-[640px] text-sm border-collapse; }
 
@@ -398,8 +579,10 @@
   */
   .nav-link {
     @apply flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium
-           text-sidebar-foreground transition-colors
+           text-sidebar-foreground transition-colors active:scale-[0.98]
            hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+    transition: background-color 180ms var(--ease-out), color 180ms var(--ease-out),
+                transform 180ms var(--ease-out);
   }
   /*
     The one place the coral appears in the navigation: the item you are on. Its label
@@ -411,7 +594,267 @@
            hover:bg-sidebar-primary hover:text-sidebar-primary-foreground;
   }
 
-  .skeleton { @apply animate-pulse rounded-md bg-muted; }
+  /*
+    A loading placeholder, with a band of light crossing it rather than the whole
+    block breathing in and out.
+
+    A pulse dims the entire shape at once, which reads as "disabled"; a sweep travels,
+    which reads as "working". It is a `translateX` on a pseudo-element, so the whole
+    thing runs on the compositor — a page of twenty of these costs no layout and no
+    paint per frame.
+  */
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-muted;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, var(--shimmer), transparent);
+    animation: shimmer 1.5s var(--ease-in-out, ease-in-out) infinite;
+  }
+  @keyframes shimmer {
+    to { transform: translateX(100%); }
+  }
+
+  /*
+    ------------------------------------------------------------------ mobile
+    The classes below exist only because the app is used on a phone. Each one is
+    the mobile half of something the desktop layout already does differently: the
+    tab bar replaces the sidebar, the sheet replaces the centred dialog, the data
+    card replaces a table row.
+    -------------------------------------------------------------------------
+  */
+
+  /*
+    A 44px hit area around an icon that is drawn smaller than that.
+
+    Growing the icon instead would change the design; this keeps the visual size and
+    pushes the *target* out to meet the finger, which is what the guideline is
+    actually about. Used on the dense icon rows in tables and card footers.
+  */
+  .tap {
+    @apply relative inline-flex items-center justify-center;
+  }
+  .tap::after {
+    content: '';
+    @apply absolute left-1/2 top-1/2 h-11 w-11 -translate-x-1/2 -translate-y-1/2;
+  }
+  @media (min-width: 640px) {
+    .tap::after { content: none; }
+  }
+
+  /*
+    The mobile tab bar.
+
+    Fixed to the bottom rather than the top because that is where a thumb rests, and
+    it sits on an opaque-ish blurred surface so list content scrolling underneath
+    stays legible through it. The safe-area inset is padding rather than margin, so
+    the bar's own background continues to the bottom edge of the screen and the home
+    indicator sits on the bar rather than on a gap below it.
+  */
+  /*
+    The mobile tab bar: a rounded bar floating clear of the screen edges rather than
+    a full-width strip welded to the bottom.
+
+    The outer element spans the width but is `pointer-events: none`, so the gutters
+    either side of the bar and the strip below it stay click-through — a floating bar
+    should not silently swallow taps on the content it is floating over. The bar
+    itself turns pointer events back on.
+  */
+  .bottom-nav {
+    @apply pointer-events-none fixed inset-x-0 bottom-0 z-40 flex lg:hidden;
+    padding-left: calc(0.75rem + var(--safe-l));
+    padding-right: calc(0.75rem + var(--safe-r));
+    padding-bottom: calc(var(--bottom-nav-gap) + var(--safe-b));
+  }
+
+  /*
+    `backdrop-blur` rather than an opaque fill: content scrolling underneath stays
+    faintly visible through the bar, which is what makes it read as floating above
+    the page rather than as a panel the page stops at.
+  */
+  /*
+    `overflow-hidden` is gone: the unread badge overhangs its icon, and clipping the
+    bar cut the corner off it.
+  */
+  .bottom-nav-bar {
+    @apply pointer-events-auto flex flex-1 items-stretch rounded-[1.75rem]
+           border border-border bg-card/80;
+    height: var(--bottom-nav-h);
+
+    /*
+      `saturate` alongside the blur is what stops the glass going grey — colour
+      passing through it stays colour, which is the difference between a frosted
+      pane and a sheet of fog.
+    */
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+
+    /*
+      Three layers rather than one. A tight contact shadow keeps the bar attached to
+      the page, a wide soft one lifts it off, and the inset highlight catches the top
+      edge the way light catches the lip of a real pane. One blurred drop shadow on
+      its own reads as a sticker.
+    */
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.10),
+      0 10px 30px -6px rgb(0 0 0 / 0.22),
+      inset 0 1px 0 rgb(255 255 255 / 0.06);
+  }
+
+  /*
+    Each tab is an equal share of the width, and the label sits under the icon rather
+    than beside it — five destinations do not fit side by side at 360px.
+  */
+  .bottom-nav-item {
+    @apply flex min-w-0 flex-1 flex-col items-center justify-center gap-[3px] px-1
+           text-[11px] font-medium leading-none text-muted-foreground;
+    /* No background change on press — the pill below handles the feedback, and a
+       full-height tint behind a rounded bar clips badly at the end tabs. */
+    transition: color 200ms ease-out;
+  }
+
+  /*
+    The pill behind the active tab's icon.
+
+    It sits on the icon rather than on the whole tab: a block filling the height of
+    the bar would read as a button to press, where a pill behind the glyph reads as
+    where you are. The label underneath goes semibold and takes the primary too, so
+    the state is never carried by hue alone.
+  */
+  .bottom-nav-icon {
+    @apply relative inline-flex h-8 w-[3.25rem] items-center justify-center rounded-full;
+    transition: transform 220ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  /*
+    The pill is a pseudo-element rather than a background on `.bottom-nav-icon`, so
+    it can scale on its own — scaling the box would drag the glyph with it, and the
+    icon should hold still while the pill arrives behind it.
+  */
+  .bottom-nav-icon::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: var(--primary);
+    opacity: 0;
+    transform: scale(0.55);
+    /*
+      A touch of overshoot on the way in, so the pill settles rather than snapping.
+      That easing is most of what separates this from a background colour being
+      toggled on. Opacity runs shorter than the scale so the colour is already there
+      while the shape is still resolving.
+    */
+    transition:
+      opacity 180ms ease-out,
+      transform 320ms cubic-bezier(0.34, 1.35, 0.5, 1);
+  }
+  .bottom-nav-item-active .bottom-nav-icon::before {
+    opacity: 0.16;
+    transform: scale(1);
+  }
+
+  /*
+    An absolutely positioned pseudo-element paints after its in-flow siblings, so
+    without this the pill would cover the glyph it is meant to sit behind. Making the
+    children positioned puts them back on top, in DOM order.
+  */
+  .bottom-nav-icon > * {
+    position: relative;
+  }
+
+  /*
+    A lighter stroke than lucide's default 2, which at 22px reads heavy next to an
+    11px label. Sizing is set on the element in AppLayout rather than here — see the
+    note on `NavItem.Icon` for why a CSS rule cannot win that one.
+  */
+  .bottom-nav-icon svg {
+    stroke-width: 1.75;
+    transition: stroke-width 200ms ease-out;
+  }
+  /* The active glyph thickens very slightly with its pill — a second, quieter signal
+     that costs no space and no colour. */
+  .bottom-nav-item-active .bottom-nav-icon svg {
+    stroke-width: 2.1;
+  }
+
+  .bottom-nav-item-active {
+    @apply font-semibold text-primary-strong;
+  }
+
+  /* Press feedback goes on the pill, not the whole tab: scaling the label with it
+     reads as the text wobbling rather than the target being pressed. */
+  .bottom-nav-item:active .bottom-nav-icon {
+    transform: scale(0.9);
+  }
+
+  /*
+    A bottom sheet: the mobile form of a dialog.
+
+    It rises from the bottom edge and is capped at 92% of the *dynamic* viewport so a
+    tall form is scrollable rather than running off under the browser chrome. Corners
+    are rounded at the top only — the bottom is flush with the screen edge, which is
+    what distinguishes a sheet from a card that happens to be near the bottom.
+  */
+  .sheet {
+    @apply flex w-full flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl outline-none
+           sm:rounded-3xl;
+    max-height: 92vh;
+    max-height: 92dvh;
+  }
+
+  /* The grab handle. Purely a signal that the panel is a sheet; the drag itself is
+     not implemented, so it is decorative and hidden from assistive technology. */
+  .sheet-handle {
+    @apply mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-border sm:hidden;
+  }
+
+  /*
+    A table row, redrawn as a card for phones.
+
+    Every table in the app keeps its `<table>` for `lg` and up and renders this list
+    instead below it. A row of a table read through a horizontal scrollbar is not
+    usable on a phone: you cannot see the header and the cell at the same time, so
+    each value has to carry its own label, which is what a card does and a `<td>`
+    cannot.
+  */
+  .data-card {
+    @apply rounded-xl border border-border bg-card p-4 shadow-sm transition-colors;
+  }
+  .data-card-row {
+    @apply flex items-baseline justify-between gap-3 text-sm;
+  }
+  .data-card-label {
+    @apply shrink-0 text-xs font-medium text-muted-foreground;
+  }
+  .data-card-value {
+    @apply min-w-0 text-right text-sm text-foreground;
+  }
+
+  /*
+    A horizontally scrolling row of filter chips.
+
+    Filters that sit in a grid on a desktop become a very tall stack on a phone,
+    pushing the content they filter off the screen. On one scrolling line they cost a
+    single row. `scroll-px` keeps a chip from stopping flush against the bleed edge.
+  */
+  .chip-row {
+    @apply -mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0;
+    scroll-padding-inline: 1rem;
+  }
+  .chip {
+    @apply inline-flex shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded-full
+           border border-border bg-card px-3.5 py-2 text-xs font-medium text-muted-foreground
+           active:scale-[0.97];
+    transition: background-color 180ms var(--ease-out), border-color 180ms var(--ease-out),
+                color 180ms var(--ease-out), transform 180ms var(--ease-out);
+  }
+  .chip-active {
+    @apply border-primary bg-primary/10 font-semibold text-primary-strong;
+  }
 
   /*
     Used where a list is replaced by another list of the same shape — switching
@@ -422,11 +865,163 @@
 }
 
 @layer utilities {
-  .animate-in-up { animation: in-up 0.25s ease-out both; }
+  .animate-in-up { animation: in-up 0.25s var(--ease-out) both; }
   @keyframes in-up {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
   }
+
+  /* The matching exit. Shorter than the entrance, and on `--ease-in` so it leaves
+     rather than lingering — dismissing something should feel quicker than summoning
+     it, or the interface feels like it is arguing. */
+  .animate-out-down { animation: out-down 0.16s var(--ease-in) both; }
+  @keyframes out-down {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to { opacity: 0; transform: translateY(4px) scale(0.985); }
+  }
+
+  /* A sheet arrives from the bottom edge rather than growing in place — the movement
+     says where it came from and where a swipe down would send it. */
+  .animate-sheet-up { animation: sheet-up 0.28s cubic-bezier(0.32, 0.72, 0, 1) both; }
+  @keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  /* And returns the same way. */
+  .animate-sheet-down { animation: sheet-down 0.2s var(--ease-in) both; }
+  @keyframes sheet-down {
+    from { transform: translateY(0); }
+    to { transform: translateY(100%); }
+  }
+
+  /*
+    The scrim behind a dialog, faded rather than switched on. A backdrop that appears
+    instantly reads as the screen breaking; one that fades reads as the page stepping
+    back to let something through.
+  */
+  .animate-scrim-in { animation: scrim-in 0.2s var(--ease-out) both; }
+  .animate-scrim-out { animation: scrim-out 0.18s var(--ease-in) both; }
+  @keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes scrim-out { from { opacity: 1; } to { opacity: 0; } }
+
+  /*
+    The screen transition.
+
+    Applied to a wrapper keyed on the route, so changing page replays it. It is small
+    on purpose: a tab bar switches between peers, and peers crossfade — a big
+    directional slide would imply a hierarchy the navigation does not have.
+  */
+  .route-enter { animation: route-enter 0.26s var(--ease-out) both; }
+  @keyframes route-enter {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  /*
+    A list whose items arrive in sequence rather than all at once.
+
+    The delay is capped after the eighth child: past that the items are below the fold
+    anyway, and an un-capped stagger means a hundred-row list spends four seconds
+    assembling itself. Everything from the ninth on shares the last delay, so a long
+    list finishes arriving at the same moment a short one would.
+  */
+  .stagger > * { animation: stagger-in 0.3s var(--ease-out) both; }
+  @keyframes stagger-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 35ms; }
+  .stagger > *:nth-child(3) { animation-delay: 70ms; }
+  .stagger > *:nth-child(4) { animation-delay: 105ms; }
+  .stagger > *:nth-child(5) { animation-delay: 140ms; }
+  .stagger > *:nth-child(6) { animation-delay: 175ms; }
+  .stagger > *:nth-child(7) { animation-delay: 210ms; }
+  .stagger > *:nth-child(n + 8) { animation-delay: 245ms; }
+
+  /*
+    Past a screenful, don't animate at all.
+
+    The task list fetches up to 200 rows. Animating every one of them means 200
+    elements promoted to their own compositor layer at once, which a mid-range phone
+    feels — and it buys nothing, because rows 13 and beyond are below the fold and
+    finish animating long before anyone scrolls to them. The visible ones stagger;
+    the rest are simply there.
+  */
+  .stagger > *:nth-child(n + 13) { animation: none; }
+
+  /*
+    Press feedback for something tappable that is not a `.btn` — a row, a tile, a
+    link that behaves like a card. Scale only, so it composites.
+  */
+  .press {
+    transition: transform 160ms var(--ease-out);
+  }
+  .press:active {
+    transform: scale(0.985);
+  }
+
+  /*
+    Safe-area helpers.
+
+    `safe-pt` and `safe-pb` are used on elements whose own padding is on their
+    children rather than on themselves — the header, the sheets — so setting the
+    property outright is safe there.
+
+    There is deliberately no `safe-px`. Padding is one property per side, so a class
+    that sets `padding-left` cannot add to a `px-4` that also sets it — whichever
+    lands later simply wins, and the gutter is silently lost. The page gutter is
+    therefore one class that carries both parts, below.
+  */
+  .safe-pt { padding-top: var(--safe-t); }
+  .safe-pb { padding-bottom: var(--safe-b); }
+
+  /*
+    The page gutter: 16px on a phone, 24px from `sm` up, plus whatever the device
+    keeps out of reach. The insets are horizontal only when a notched phone is held
+    in landscape, which is exactly the case where a hard 16px puts the first
+    character of every heading under the notch.
+  */
+  .px-page {
+    padding-left: calc(1rem + var(--safe-l));
+    padding-right: calc(1rem + var(--safe-r));
+  }
+  @media (min-width: 640px) {
+    .px-page {
+      padding-left: calc(1.5rem + var(--safe-l));
+      padding-right: calc(1.5rem + var(--safe-r));
+    }
+  }
+
+  /*
+    Room under the last item for the fixed tab bar. Without it the final row of every
+    list sits behind the bar, where it can be read but not tapped.
+  */
+  .pb-nav {
+    padding-bottom: calc(
+      var(--bottom-nav-h) + var(--bottom-nav-gap) + var(--safe-b) + 1rem
+    );
+  }
+  @media (min-width: 1024px) { .pb-nav { padding-bottom: 0; } }
+
+  /*
+    Sticks an element directly beneath the app header.
+
+    The header is 56px on a phone and 64px from `sm` up, and on a notched device it
+    also carries the status-bar inset — so a hard-coded `top-16` leaves an 8px gap of
+    scrolling content showing through on a phone, and a much larger one in a
+    home-screen window. This tracks all three.
+  */
+  .under-header { top: calc(3.5rem + var(--safe-t)); }
+  @media (min-width: 640px) { .under-header { top: calc(4rem + var(--safe-t)); } }
+
+  /*
+    For the chip rows and the board: they are scrolled by dragging, and a visible
+    scrollbar on a touch surface is chrome nobody uses.
+  */
+  .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
 
   @media print {
     .no-print { display: none !important; }

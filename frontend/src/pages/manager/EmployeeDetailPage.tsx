@@ -164,7 +164,9 @@ export function EmployeeDetailPage() {
       {/* The two cards the brief asks for, as tabs so neither is buried below the fold. */}
       <div className="card">
         <div className="border-b border-border px-4 pt-4">
-          <div className="flex gap-1" role="tablist" aria-label="Employee sections">
+          {/* Scrolls rather than wrapping: two tabs on a second line read as two
+              separate controls instead of one row of choices. */}
+          <div className="hide-scrollbar flex gap-1 overflow-x-auto" role="tablist" aria-label="Employee sections">
             {([
               { key: 'reports' as const, label: 'Tasks Done', icon: <FileText className="h-4 w-4" />, count: employee.report_count },
               { key: 'tasks' as const, label: 'Assigned Tasks', icon: <ClipboardList className="h-4 w-4" />, count: counts.total },
@@ -175,7 +177,7 @@ export function EmployeeDetailPage() {
                 role="tab"
                 aria-selected={tab === t.key}
                 onClick={() => setTab(t.key)}
-                className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+                className={`flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
                   tab === t.key
                     ? 'border-primary text-primary-strong'
                     : 'border-transparent text-muted-foreground hover:text-foreground'

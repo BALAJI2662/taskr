@@ -272,12 +272,17 @@ export function AllTasksPage() {
                 placeholder="Search work, key or assignee"
                 className="lg:w-80"
               />
-              <div className="flex flex-wrap items-center gap-2">
+              {/*
+                One row on a phone: the button takes what it needs and the sort select
+                takes the rest. Fixed at 176px it wrapped to a second line and left a
+                half-empty one above it.
+              */}
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setShowFilters((s) => !s)}
                   aria-expanded={showFilters}
-                  className="btn-secondary"
+                  className="btn-secondary shrink-0"
                 >
                   <Filter className="h-4 w-4" /> Filter
                   {activeFilterCount > 0 && (
@@ -286,7 +291,7 @@ export function AllTasksPage() {
                     </span>
                   )}
                 </button>
-                <Select value={sort} onChange={(v) => setSort(v)} options={[{ value: 'created_desc', label: `Newest first` }, { value: 'created_asc', label: `Oldest first` }, { value: 'deadline_asc', label: `Deadline (soonest)` }, { value: 'priority_desc', label: `Priority (highest)` }]} ariaLabel="Sort tasks" className="w-44" />
+                <Select value={sort} onChange={(v) => setSort(v)} options={[{ value: 'created_desc', label: `Newest first` }, { value: 'created_asc', label: `Oldest first` }, { value: 'deadline_asc', label: `Deadline (soonest)` }, { value: 'priority_desc', label: `Priority (highest)` }]} ariaLabel="Sort tasks" className="min-w-0 flex-1 lg:w-44 lg:flex-none" />
               </div>
             </div>
 
@@ -328,11 +333,14 @@ export function AllTasksPage() {
 
             {/* Bulk action bar — only present when something is actually selected. */}
             {selected.size > 0 && (
-              <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted px-4 py-2.5">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-muted px-4 py-2.5">
                 <p className="text-sm font-semibold text-foreground">
                   {selected.size} selected
                 </p>
-                <div className="flex flex-wrap items-center gap-2">
+                {/* Scrolls on one line rather than stacking: this bar sits between the
+                    selection and the list, so every row it grows by pushes the tasks
+                    being acted on further off the screen. */}
+                <div className="hide-scrollbar -mx-4 flex w-full items-center gap-2 overflow-x-auto px-4 sm:mx-0 sm:w-auto sm:flex-wrap sm:px-0">
                   {(['pending', 'in_progress', 'completed'] as TaskStatus[]).map((s) => (
                     <button
                       key={s}

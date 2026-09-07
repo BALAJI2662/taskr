@@ -4,6 +4,7 @@ import { projectApi } from '../api/endpoints';
 import { ApiError } from '../api/client';
 import { useToast } from './Toast';
 import { Modal, Spinner } from './ui';
+import { useLastPresent } from '../lib/presence';
 import type { Project } from '../types';
 
 interface Props {
@@ -13,7 +14,7 @@ interface Props {
   onSaved: (project: Project) => void;
 }
 
-export function EditProjectModal({ open, onClose, project, onSaved }: Props) {
+export function EditProjectModal({ open, onClose, project: projectProp, onSaved }: Props) {
   const toast = useToast();
 
   const [name, setName] = useState('');
@@ -24,13 +25,20 @@ export function EditProjectModal({ open, onClose, project, onSaved }: Props) {
   const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
-    if (!open || !project) return;
-    setName(project.name);
-    setKey(project.project_key);
-    setDescription(project.description ?? '');
+    if (!open || !projectProp) return;
+    setName(projectProp.name);
+    setKey(projectProp.project_key);
+    setDescription(projectProp.description ?? '');
     setErrors({});
-  }, [open, project]);
+  }, [open, projectProp]);
 
+  /*
+    The parent closes this by clearing the project, which would tear the dialog out of
+    the tree before its exit animation could play. Holding the last one keeps the
+    panel's content on screen for the beat it takes to leave — nothing in it can be
+    edited during that beat, because `open` is already false.
+  */
+  const project = useLastPresent(projectProp);
   if (!project) return null;
 
   const keyChanged = key.trim().toUpperCase() !== project.project_key;
