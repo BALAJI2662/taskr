@@ -33,6 +33,7 @@ export function createApp() {
   app.disable('x-powered-by');
 
   app.use(helmet({
+    hsts: false,
     contentSecurityPolicy: {
       useDefaults: true,
       directives: {
@@ -43,6 +44,7 @@ export function createApp() {
         imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
         connectSrc: ["'self'"],
         frameAncestors: ["'none'"],
+        upgradeInsecureRequests: null,
       },
     },
     crossOriginResourcePolicy: { policy: 'same-origin' },
